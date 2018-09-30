@@ -1,0 +1,180 @@
+
+
+
+<body>
+    <div id="test">
+        <p>{{ a }}</p>
+        <!--<div id="show"></div>-->
+    </div>
+</body>
+
+<script type="text/javascript">
+    //ÉèÖÃÒÀÀµÏî
+    Dep.target = null;
+    function Dep() {
+        this.deps = [];
+    }
+
+    Dep.prototype.addDep = function (key) {
+        this.deps.push(key);
+    }
+
+    Dep.prototype.removeDep = function (key) {
+        this.deps.remove(key);
+    }
+
+    Dep.prototype.notify = function () {
+        this.deps.forEach(dep => {
+            dep.update();
+        });
+    }
+    Dep.prototype.depend = function () {
+        Dep.target.addDep(this);
+    }
+
+
+    function Observer(data) {
+        for (var key in data) {
+            var dep = new Dep();
+            var oldValue = data[key];
+            Object.defineProperty(data, key, {
+                set: function (newval) {
+                    if (oldValue != newval) {
+                        oldValue = newval;
+                        dep.notify();
+                    }
+                },
+                get: function () {
+                    if (Dep.target) {
+                        dep.addDep(Dep.target);
+                    }
+
+                    return oldValue;
+                }
+            }
+            )
+        }
+    }
+
+
+    function Compile(vm, el) {
+        this.$el = document.querySelector(el);
+        this.$vm = vm;
+        this.$fragment = this.nodeToFragment(this.$el);
+        this.compileElement(this.$fragment);
+        this.$el.appendChild(this.$fragment);
+    }
+
+    Compile.prototype.nodeToFragment = function (el) {
+        var fragment = document.createDocumentFragment();
+        var child;
+        while (child = el.firstChild) {
+            fragment.appendChild(child);
+        }
+        return fragment;
+    }
+
+    Compile.prototype.compileElement = function (fragment) {
+        var nodes = fragment.childNodes;
+        var me = this;
+        [].slice.call(nodes).forEach(function (node) {
+            var expreg = /\{\{(.*)\}\}/;
+            var content = node.textContent;
+            if (node.nodeType == 1 && expreg.test(content)) {
+                content = content.replace(expreg, "$1").trim();
+                me.texts(node, content);
+            }
+        })
+    }
+
+
+    Compile.prototype.texts = function (node, exp) {
+        CompilUnit.text(node, this.$vm, exp)
+    }
+
+    var CompilUnit = {
+        text: function (node, vm, exp) {
+            this.bind(node, vm, exp, "text");
+        },
+        bind: function (node, vm, exp, type) {
+            var updateFn = updater[type + 'update'];
+            updateFn && updateFn(node, vm[exp]);
+            new Watcher(vm, exp, function (value, oldVlaue) {
+                updateFn && updateFn(node, value, oldVlaue);
+            });
+        }
+    }
+
+    var updater = {
+        textupdate: function (node, value) {
+            node.textContent = value;
+        },
+    }
+
+    function Watcher(vm, exp, callback) {
+        this.vm = vm;
+        this.exp = exp;
+        this.callback = callback;
+        this.value = this.get();
+    }
+
+    Watcher.prototype = {
+        constructor:"Watcher",
+    }
+
+    var wp = Watcher.prototype;
+    wp.update = function () {
+        var value = this.get();
+        var oldValue = this.value;
+        if (value != oldValue) {
+            this.value = value;
+            this.callback.call(this.vm, value, oldValue);
+        }
+    }
+    wp.get = function () {
+        Dep.target = this;
+        var value = this.vm[this.exp];
+        Dep.target = null;
+        return value;
+    }
+
+
+    function Avalon(data) {
+        var vm = this;
+        var datas = this._data = data;
+        Object.keys(datas).forEach(function (key) {
+            console.log(vm);
+            vm._proxy(key);
+        });
+
+        new Observer(data, vm);
+        this.$Compile = new Compile(vm, "#test");
+    }
+
+    Avalon.prototype = {
+        _proxy: function (key) {
+            var vm = this;
+            Object.defineProperty(vm, key, {
+                configuratble: false,
+                enumerable: true,
+                get: function proxyGetter() {
+                    return vm._data[key];
+                },
+                set: function proxySetter(newValue) {
+                    vm._data[key] = newValue;
+                }
+            });
+        }
+    }
+
+    var vm = new Avalon({
+        a:"hello"
+    });
+
+
+    vm.a = "hahahahahahah";
+    
+
+
+    //Compile(data, "#test");
+</script>
